@@ -286,6 +286,10 @@ class TuyaBLEDevice:
         """Some cl curtain devices disconnect on device info request."""
         return self.category != "cl"
 
+    def _requires_pairing_request(self) -> bool:
+        """Some cl curtain devices fail active pairing over BLE proxy."""
+        return self.category != "cl"
+
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
 
@@ -688,28 +692,36 @@ class TuyaBLEDevice:
                     continue
 
                 if self._client and self._client.is_connected:
-                    _LOGGER.debug("%s: Sending pairing request", self.address)
-                    try:
-                        if not await self._send_packet_while_connected(
-                            TuyaBLECode.FUN_SENDER_PAIR,
-                            self._build_pairing_request(),
-                            0,
-                            True,
-                        ):
+                    if self._requires_pairing_request():
+                        _LOGGER.debug("%s: Sending pairing request", self.address)
+                        try:
+                            if not await self._send_packet_while_connected(
+                                TuyaBLECode.FUN_SENDER_PAIR,
+                                self._build_pairing_request(),
+                                0,
+                                True,
+                            ):
+                                self._client = None
+                                _LOGGER.error(
+                                    "%s: Sending pairing request failed",
+                                    self.address,
+                                )
+                                continue
+                        except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
                             self._client = None
                             _LOGGER.error(
                                 "%s: Sending pairing request failed",
                                 self.address,
+                                exc_info=True,
                             )
                             continue
-                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        self._client = None
-                        _LOGGER.error(
-                            "%s: Sending pairing request failed",
+                    else:
+                        self._is_paired = True
+                        _LOGGER.debug(
+                            "%s: Skipping pairing request for %s category",
                             self.address,
-                            exc_info=True,
+                            self.category,
                         )
-                        continue
                 else:
                     continue
 
