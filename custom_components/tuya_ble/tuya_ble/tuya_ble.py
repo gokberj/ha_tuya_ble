@@ -282,6 +282,10 @@ class TuyaBLEDevice:
         if await self._update_device_info():
             self._decode_advertisement_data()
 
+    def _supports_device_info_request(self) -> bool:
+        """Some cl curtain devices disconnect on device info request."""
+        return self.category != "cl"
+
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
 
@@ -651,20 +655,33 @@ class TuyaBLEDevice:
                             0,
                             True,
                         ):
+                            if self._supports_device_info_request():
+                                self._client = None
+                                _LOGGER.error(
+                                    "%s: Sending device info request failed",
+                                    self.address,
+                                )
+                                continue
+                            _LOGGER.warning(
+                                "%s: Device info request failed; continuing with login key fallback for %s category",
+                                self.address,
+                                self.category,
+                            )
+                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
+                        if self._supports_device_info_request():
                             self._client = None
                             _LOGGER.error(
                                 "%s: Sending device info request failed",
                                 self.address,
+                                exc_info=True,
                             )
                             continue
-                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        self._client = None
-                        _LOGGER.error(
-                            "%s: Sending device info request failed",
+                        _LOGGER.warning(
+                            "%s: Device info request failed; continuing with login key fallback for %s category",
                             self.address,
+                            self.category,
                             exc_info=True,
                         )
-                        continue
                 else:
                     continue
 
@@ -788,8 +805,12 @@ class TuyaBLEDevice:
             key = self._login_key
             security_flag = b"\x04"
         else:
-            key = self._session_key
-            security_flag = b"\x05"
+            if self._session_key is not None:
+                key = self._session_key
+                security_flag = b"\x05"
+            else:
+                key = self._login_key
+                security_flag = b"\x04"
 
         raw = bytearray()
         raw += pack(">IIHH", seq_num, response_to, code.value, len(data))

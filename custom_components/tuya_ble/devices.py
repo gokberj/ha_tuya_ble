@@ -310,10 +310,14 @@ devices_database: dict[str, TuyaBLECategoryInfo] = {
         },
     ),
     "cl": TuyaBLECategoryInfo(
+        info=TuyaBLEProductInfo(
+            name="Curtain Controller",
+        ),
         products={
             **dict.fromkeys(
                 [
-                    "4pbr8eig"
+                    "4pbr8eig",
+                    "qqdxfdht",
                 ],
                 TuyaBLEProductInfo(
                     name="Blind Controller"

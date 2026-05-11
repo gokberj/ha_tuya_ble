@@ -80,8 +80,17 @@ class TuyaBLECategoryCoverMapping:
 # - [X] 13  - Battery (RAW)
 
 
+DEFAULT_CL_COVER_MAPPING = TuyaBLECoverMapping(
+    description=CoverEntityDescription(key="ble_curtain_controller"),
+    cover_state_dp_id=1,
+    cover_position_set_dp=2,
+    cover_position_dp_id=3,
+    cover_battery_dp_id=13,
+)
+
 mapping: dict[str, TuyaBLECategoryCoverMapping] = {
     "cl": TuyaBLECategoryCoverMapping(
+        mapping=[DEFAULT_CL_COVER_MAPPING],
         products={
             **dict.fromkeys(
                 ["4pbr8eig", "qqdxfdht"],
@@ -103,20 +112,14 @@ mapping: dict[str, TuyaBLECategoryCoverMapping] = {
                 ],
             ),
             "kcy0x4pi": [
-                TuyaBLECoverMapping(
-                    description=CoverEntityDescription(key="ble_curtain_controller"),
-                    cover_state_dp_id=1,
-                    cover_position_set_dp=2,
-                    cover_position_dp_id=3,
-                    cover_battery_dp_id=13,
-                )
+                DEFAULT_CL_COVER_MAPPING
             ],
         },
     ),
 }
 
 
-def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECategoryCoverMapping]:
+def get_mapping_by_device(device: TuyaBLEDevice) -> list[TuyaBLECoverMapping]:
     category = mapping.get(device.category)
     if category is not None and category.products is not None:
         product_mapping = category.products.get(device.product_id)
@@ -227,7 +230,7 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
         if self._mapping.cover_state_dp_id != 0:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.cover_state_dp_id,
-                TuyaBLEDataPointType.DT_VALUE,
+                TuyaBLEDataPointType.DT_ENUM,
                 state.value,
             )
             if datapoint:
