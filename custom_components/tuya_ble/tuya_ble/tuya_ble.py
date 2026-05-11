@@ -532,11 +532,18 @@ class TuyaBLEDevice:
             )
             return
         self._client = None
-        _LOGGER.warning(
-            "%s: Device unexpectedly disconnected; RSSI: %s",
-            self.address,
-            self.rssi,
-        )
+        if self.category == "cl":
+            _LOGGER.debug(
+                "%s: Device disconnected (cl category); RSSI: %s",
+                self.address,
+                self.rssi,
+            )
+        else:
+            _LOGGER.warning(
+                "%s: Device unexpectedly disconnected; RSSI: %s",
+                self.address,
+                self.rssi,
+            )
         if was_paired:
             _LOGGER.debug(
                 "%s: Scheduling reconnect; RSSI: %s",
