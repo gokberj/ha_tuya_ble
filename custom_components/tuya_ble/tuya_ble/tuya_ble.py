@@ -290,6 +290,10 @@ class TuyaBLEDevice:
         """Some cl curtain devices fail active pairing over BLE proxy."""
         return self.category != "cl"
 
+    def _use_short_lived_connection(self) -> bool:
+        """Use short-lived BLE command sessions for unstable cl devices."""
+        return self.category == "cl"
+
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
 
@@ -1376,7 +1380,11 @@ class TuyaBLEDevice:
 
     async def _send_datapoints(self, datapoint_ids: list[int]) -> None:
         """Send new values of datapoints to the device."""
-        if self._protocol_version == 3:
-            await self._send_datapoints_v3(datapoint_ids)
-        else:
-            raise TuyaBLEDeviceError(0)
+        try:
+            if self._protocol_version == 3:
+                await self._send_datapoints_v3(datapoint_ids)
+            else:
+                raise TuyaBLEDeviceError(0)
+        finally:
+            if self._use_short_lived_connection():
+                self._disconnect()
