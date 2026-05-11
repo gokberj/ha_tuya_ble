@@ -608,7 +608,7 @@ class TuyaBLEDevice:
                             self._ble_device,
                             self.address,
                             self._disconnected,
-                            use_services_cache=True,
+                            use_services_cache=False,
                             ble_device_callback=lambda: self._ble_device,
                         )
                 except BleakNotFoundError:
@@ -632,6 +632,7 @@ class TuyaBLEDevice:
                     _LOGGER.debug("%s: Connected; RSSI: %s", self.address, self.rssi)
                     self._client = client
                     try:
+                        await asyncio.sleep(0.25)
                         await self._client.start_notify(
                             CHARACTERISTIC_NOTIFY, self._notification_handler
                         )
