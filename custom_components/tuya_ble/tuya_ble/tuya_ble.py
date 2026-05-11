@@ -648,28 +648,22 @@ class TuyaBLEDevice:
                     continue
 
                 if self._client and self._client.is_connected:
-                    _LOGGER.debug("%s: Sending device info request", self.address)
-                    try:
-                        if not await self._send_packet_while_connected(
-                            TuyaBLECode.FUN_SENDER_DEVICE_INFO,
-                            bytes(0),
-                            0,
-                            True,
-                        ):
-                            if self._supports_device_info_request():
+                    if self._supports_device_info_request():
+                        _LOGGER.debug("%s: Sending device info request", self.address)
+                        try:
+                            if not await self._send_packet_while_connected(
+                                TuyaBLECode.FUN_SENDER_DEVICE_INFO,
+                                bytes(0),
+                                0,
+                                True,
+                            ):
                                 self._client = None
                                 _LOGGER.error(
                                     "%s: Sending device info request failed",
                                     self.address,
                                 )
                                 continue
-                            _LOGGER.warning(
-                                "%s: Device info request failed; continuing with login key fallback for %s category",
-                                self.address,
-                                self.category,
-                            )
-                    except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                        if self._supports_device_info_request():
+                        except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
                             self._client = None
                             _LOGGER.error(
                                 "%s: Sending device info request failed",
@@ -677,11 +671,11 @@ class TuyaBLEDevice:
                                 exc_info=True,
                             )
                             continue
-                        _LOGGER.warning(
-                            "%s: Device info request failed; continuing with login key fallback for %s category",
+                    else:
+                        _LOGGER.debug(
+                            "%s: Skipping device info request for %s category",
                             self.address,
                             self.category,
-                            exc_info=True,
                         )
                 else:
                     continue
