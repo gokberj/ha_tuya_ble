@@ -1261,6 +1261,13 @@ class TuyaBLEDevice:
                     response_to,
                     result,
                 )
+                _LOGGER.warning(
+                    "%s: Received response to %s packet #%s, result: %s",
+                    self.address,
+                    code.name,
+                    response_to,
+                    result,
+                )
                 if result == 0:
                     future.set_result(result)
                 else:
@@ -1398,7 +1405,7 @@ class TuyaBLEDevice:
         for dp_id in datapoint_ids:
             dp = self._datapoints[dp_id]
             value = dp._get_value()
-            _LOGGER.debug(
+            _LOGGER.warning(
                 "%s: Sending datapoint update, id: %s, type: %s: value: %s",
                 self.address,
                 dp.id,
