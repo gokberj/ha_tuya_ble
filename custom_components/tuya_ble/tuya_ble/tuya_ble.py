@@ -229,11 +229,13 @@ class TuyaBLEDevice:
         device_manager: AbstaractTuyaBLEDeviceManager,
         ble_device: BLEDevice,
         advertisement_data: AdvertisementData | None = None,
+        ble_device_callback: Callable[[], BLEDevice | None] | None = None,
     ) -> None:
         """Init the TuyaBLE."""
         self._device_manager = device_manager
         self._device_info: TuyaBLEDeviceCredentials | None = None
         self._ble_device = ble_device
+        self._ble_device_callback = ble_device_callback
         self._advertisement_data = advertisement_data
         self._operation_lock = asyncio.Lock()
         self._connect_lock = asyncio.Lock()
@@ -276,6 +278,14 @@ class TuyaBLEDevice:
         """Set the ble device."""
         self._ble_device = ble_device
         self._advertisement_data = advertisement_data
+
+    def _get_ble_device(self) -> BLEDevice:
+        """Return the freshest BLE device reference Home Assistant has."""
+        if self._ble_device_callback:
+            ble_device = self._ble_device_callback()
+            if ble_device:
+                self._ble_device = ble_device
+        return self._ble_device
 
     async def initialize(self) -> None:
         _LOGGER.debug("%s: Initializing", self.address)
@@ -641,17 +651,21 @@ class TuyaBLEDevice:
                     raise BleakNotFoundError()
                 try:
                     async with global_connect_lock:
-                        _LOGGER.debug(
-                            "%s: Connecting; RSSI: %s", self.address, self.rssi
+                        ble_device = self._get_ble_device()
+                        _LOGGER.warning(
+                            "%s: Connecting to BLE device %s; RSSI: %s",
+                            self.address,
+                            ble_device,
+                            self.rssi,
                         )
                         client = await establish_connection(
                             BleakClientWithServiceCache,
-                            self._ble_device,
+                            ble_device,
                             self.address,
                             self._disconnected,
                             max_attempts=self._establish_connection_attempts_count(),
                             use_services_cache=False,
-                            ble_device_callback=lambda: self._ble_device,
+                            ble_device_callback=self._get_ble_device,
                         )
                 except BleakNotFoundError:
                     _LOGGER.error(
