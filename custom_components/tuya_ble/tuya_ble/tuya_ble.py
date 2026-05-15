@@ -294,6 +294,18 @@ class TuyaBLEDevice:
         """Use short-lived BLE command sessions for unstable cl devices."""
         return self.category == "cl"
 
+    def _connect_attempts_count(self) -> int:
+        """Return outer connection retry attempts."""
+        if self.category == "cl":
+            return 2
+        return 100
+
+    def _establish_connection_attempts_count(self) -> int:
+        """Return inner bleak-retry-connector attempts."""
+        if self.category == "cl":
+            return 2
+        return 4
+
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
 
@@ -603,7 +615,7 @@ class TuyaBLEDevice:
             await asyncio.sleep(0.01)
             if self._client and self._client.is_connected and self._is_paired:
                 return
-            attempts_count = 100
+            attempts_count = self._connect_attempts_count()
             while attempts_count > 0:
                 attempts_count -= 1
                 if attempts_count == 0:
@@ -623,6 +635,7 @@ class TuyaBLEDevice:
                             self._ble_device,
                             self.address,
                             self._disconnected,
+                            max_attempts=self._establish_connection_attempts_count(),
                             use_services_cache=False,
                             ble_device_callback=lambda: self._ble_device,
                         )

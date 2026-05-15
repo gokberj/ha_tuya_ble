@@ -81,6 +81,8 @@ class TuyaBLEEntity(CoordinatorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
+        if self._device.category == "cl" and self._device.rssi is not None:
+            return True
         return self._coordinator.connected
 
     @callback

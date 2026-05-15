@@ -1,6 +1,7 @@
 """The Tuya BLE integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from bleak_retry_connector import BLEAK_RETRY_EXCEPTIONS as BLEAK_EXCEPTIONS, get_device
@@ -32,6 +33,22 @@ PLATFORMS: list[Platform] = [
 
 _LOGGER = logging.getLogger(__name__)
 
+INITIAL_UPDATE_TIMEOUT = 20
+
+
+async def _async_initial_update(device: TuyaBLEDevice) -> None:
+    """Fetch initial device state without blocking Home Assistant startup."""
+    try:
+        await asyncio.wait_for(device.update(), timeout=INITIAL_UPDATE_TIMEOUT)
+    except TimeoutError:
+        _LOGGER.warning(
+            "%s: Initial update timed out after %s seconds",
+            device.address,
+            INITIAL_UPDATE_TIMEOUT,
+        )
+    except BLEAK_EXCEPTIONS:
+        _LOGGER.debug("%s: Initial update failed", device.address, exc_info=True)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Tuya BLE from a config entry."""
@@ -58,7 +75,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"Could not communicate with Tuya BLE device with address {address}"
         ) from ex
     '''
-    hass.add_job(device.update())
+    if device.category != "cl":
+        hass.async_create_task(_async_initial_update(device))
 
     @callback
     def _async_update_ble(
