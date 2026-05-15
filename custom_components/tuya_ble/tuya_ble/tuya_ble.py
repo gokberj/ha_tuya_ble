@@ -294,6 +294,10 @@ class TuyaBLEDevice:
         """Use short-lived BLE command sessions for unstable cl devices."""
         return self.category == "cl"
 
+    def _uses_v3_datapoints(self) -> bool:
+        """Return if the device uses v3 datapoint commands."""
+        return self._protocol_version == 3 or self.category == "cl"
+
     def _connect_attempts_count(self) -> int:
         """Return outer connection retry attempts."""
         if self.category == "cl":
@@ -1409,10 +1413,18 @@ class TuyaBLEDevice:
     async def _send_datapoints(self, datapoint_ids: list[int]) -> None:
         """Send new values of datapoints to the device."""
         try:
-            if self._protocol_version == 3:
-                await self._send_datapoints_v3(datapoint_ids)
-            else:
+            if not self._uses_v3_datapoints():
                 raise TuyaBLEDeviceError(0)
+            if self._protocol_version != 3:
+                _LOGGER.warning(
+                    "%s: Forcing v3 datapoint command for %s category"
+                    " despite advertised protocol %s",
+                    self.address,
+                    self.category,
+                    self._protocol_version,
+                )
+                self._protocol_version = 3
+            await self._send_datapoints_v3(datapoint_ids)
         finally:
             if self._use_short_lived_connection():
                 self._disconnect()
