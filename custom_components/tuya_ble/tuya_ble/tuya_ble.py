@@ -590,9 +590,12 @@ class TuyaBLEDevice:
             client = self._client
             self._expected_disconnect = True
             self._client = None
-            if client and client.is_connected:
-                await client.stop_notify(CHARACTERISTIC_NOTIFY)
-                await client.disconnect()
+            try:
+                if client and client.is_connected:
+                    await client.stop_notify(CHARACTERISTIC_NOTIFY)
+                    await client.disconnect()
+            finally:
+                self._expected_disconnect = False
         async with self._seq_num_lock:
             self._current_seq_num = 1
 
@@ -600,7 +603,14 @@ class TuyaBLEDevice:
         """Ensure connection to device is established."""
         global global_connect_lock
         if self._expected_disconnect:
-            return
+            _LOGGER.debug(
+                "%s: Expected disconnect in progress,"
+                " waiting before reconnect; RSSI: %s",
+                self.address,
+                self.rssi,
+            )
+            async with self._connect_lock:
+                pass
         if self._connect_lock.locked():
             _LOGGER.debug(
                 "%s: Connection already in progress,"
@@ -892,10 +902,16 @@ class TuyaBLEDevice:
     ) -> None:
         """Send packet to device and optional read response."""
         if self._expected_disconnect:
-            return
+            _LOGGER.debug(
+                "%s: Expected disconnect in progress,"
+                " waiting before sending %s; RSSI: %s",
+                self.address,
+                code.name,
+                self.rssi,
+            )
+            async with self._connect_lock:
+                pass
         await self._ensure_connected()
-        if self._expected_disconnect:
-            return
         await self._send_packet_while_connected(code, data, 0, wait_for_response)
 
     async def _send_response(
@@ -987,10 +1003,9 @@ class TuyaBLEDevice:
 
     async def _resend_packets(self, packets: list[bytes]) -> None:
         if self._expected_disconnect:
-            return
+            async with self._connect_lock:
+                pass
         await self._ensure_connected()
-        if self._expected_disconnect:
-            return
         await self._int_send_packet_while_connected(packets)
 
     async def _send_packets_locked(self, packets: list[bytes]) -> None:

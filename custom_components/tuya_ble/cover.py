@@ -208,6 +208,12 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
 
     async def _update_cover_state(self, state: TuyaCoverState) -> None:
         if self._mapping.cover_state_dp_id != 0:
+            _LOGGER.warning(
+                "%s: Sending cover command %s via datapoint %s",
+                self._device.address,
+                state.name,
+                self._mapping.cover_state_dp_id,
+            )
             # In some circumstances (presumably due to a communication error in between where packets were lost)
             # It can be the case that the device does not update the state of the cover and does not accept new commands.
             # This is why a timer is here to verify that the state is updated and to manually request the status update
@@ -218,10 +224,10 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                     time_now=datetime.now(timezone.utc)
                 )
             )
-            self._update_cover_state_without_validation(state)
+            await self._update_cover_state_without_validation(state)
             self._update_ha_state_for_cover_state(state)
 
-    def _update_cover_state_without_validation(self, state: TuyaCoverState) -> None:
+    async def _update_cover_state_without_validation(self, state: TuyaCoverState) -> None:
         if self._mapping.cover_state_dp_id != 0:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.cover_state_dp_id,
@@ -229,7 +235,7 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                 state.value,
             )
             if datapoint:
-                self._hass.create_task(datapoint.set_value(state.value))
+                await datapoint.set_value(state.value)
 
     async def _validate_data_update_from_device_and_reconnect_if_needed(
         self,
@@ -274,7 +280,13 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                 position,
             )
             if datapoint:
-                self._hass.create_task(datapoint.set_value(position))
+                _LOGGER.warning(
+                    "%s: Sending cover position %s via datapoint %s",
+                    self._device.address,
+                    kwargs[ATTR_POSITION],
+                    self._mapping.cover_position_set_dp,
+                )
+                await datapoint.set_value(position)
 
 
 async def async_setup_entry(
