@@ -330,6 +330,10 @@ class TuyaBLEDevice:
             return 0
         return 0.25
 
+    def _wait_for_datapoint_response(self) -> bool:
+        """Return if datapoint writes should wait for a command response."""
+        return self.category != "cl"
+
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
 
@@ -1440,7 +1444,17 @@ class TuyaBLEDevice:
             data += pack(">BBB", dp.id, int(dp.type.value), len(value))
             data += value
 
-        await self._send_packet(TuyaBLECode.FUN_SENDER_DPS, data)
+        wait_for_response = self._wait_for_datapoint_response()
+        if not wait_for_response:
+            _LOGGER.warning(
+                "%s: Sending datapoint command without waiting for response",
+                self.address,
+            )
+        await self._send_packet(
+            TuyaBLECode.FUN_SENDER_DPS,
+            data,
+            wait_for_response=wait_for_response,
+        )
 
     async def _send_datapoints(self, datapoint_ids: list[int]) -> None:
         """Send new values of datapoints to the device."""
