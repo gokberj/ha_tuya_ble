@@ -219,11 +219,12 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
             # This is why a timer is here to verify that the state is updated and to manually request the status update
             # if no new data has come in within 1 second as it points to a communication error (as happened in tests with
             # the kcy0x4pi product).
-            self._hass.add_job(
-                self._validate_data_update_from_device_and_reconnect_if_needed(
-                    time_now=datetime.now(timezone.utc)
+            if self._device.category != "cl":
+                self._hass.add_job(
+                    self._validate_data_update_from_device_and_reconnect_if_needed(
+                        time_now=datetime.now(timezone.utc)
+                    )
                 )
-            )
             await self._update_cover_state_without_validation(state)
             self._update_ha_state_for_cover_state(state)
 
