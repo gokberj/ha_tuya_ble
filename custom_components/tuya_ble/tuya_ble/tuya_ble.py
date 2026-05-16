@@ -320,6 +320,16 @@ class TuyaBLEDevice:
             return 2
         return 4
 
+    def _use_services_cache(self) -> bool:
+        """Return if cached GATT services should be used."""
+        return self.category == "cl"
+
+    def _post_connect_notify_delay(self) -> float:
+        """Return delay before starting notifications."""
+        if self.category == "cl":
+            return 0
+        return 0.25
+
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
 
@@ -664,7 +674,7 @@ class TuyaBLEDevice:
                             self.address,
                             self._disconnected,
                             max_attempts=self._establish_connection_attempts_count(),
-                            use_services_cache=False,
+                            use_services_cache=self._use_services_cache(),
                             ble_device_callback=self._get_ble_device,
                         )
                 except BleakNotFoundError:
@@ -688,7 +698,8 @@ class TuyaBLEDevice:
                     _LOGGER.debug("%s: Connected; RSSI: %s", self.address, self.rssi)
                     self._client = client
                     try:
-                        await asyncio.sleep(0.25)
+                        if delay := self._post_connect_notify_delay():
+                            await asyncio.sleep(delay)
                         await self._client.start_notify(
                             CHARACTERISTIC_NOTIFY, self._notification_handler
                         )
