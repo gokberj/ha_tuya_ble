@@ -106,9 +106,12 @@ mapping: dict[str, TuyaBLECategoryCoverMapping] = {
                     )
                 ],
             ),
-            "kcy0x4pi": [
-                DEFAULT_CL_COVER_MAPPING
-            ],
+            **dict.fromkeys(
+                ["9ayszy9m", "kcy0x4pi"],
+                [
+                    DEFAULT_CL_COVER_MAPPING
+                ],
+            ),
         },
     ),
 }
