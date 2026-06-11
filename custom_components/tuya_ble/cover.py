@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from enum import IntEnum
 import logging
 
+from bleak_retry_connector import BleakNotFoundError
 from homeassistant.components.cover import (
     CoverEntityDescription,
     CoverEntityFeature,
@@ -17,6 +18,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -228,7 +230,14 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                         time_now=datetime.now(timezone.utc)
                     )
                 )
-            await self._update_cover_state_without_validation(state)
+            try:
+                await self._update_cover_state_without_validation(state)
+            except BleakNotFoundError as err:
+                raise HomeAssistantError(
+                    f"Could not connect to Tuya BLE curtain at {self._device.address}. "
+                    "Make sure the Home Assistant Bluetooth adapter can connect directly "
+                    "and the curtain is awake/nearby."
+                ) from err
             self._update_ha_state_for_cover_state(state)
 
     async def _update_cover_state_without_validation(self, state: TuyaCoverState) -> None:

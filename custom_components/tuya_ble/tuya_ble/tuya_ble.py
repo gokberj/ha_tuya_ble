@@ -311,13 +311,13 @@ class TuyaBLEDevice:
     def _connect_attempts_count(self) -> int:
         """Return outer connection retry attempts."""
         if self.category == "cl":
-            return 2
+            return 3
         return 100
 
     def _establish_connection_attempts_count(self) -> int:
         """Return inner bleak-retry-connector attempts."""
         if self.category == "cl":
-            return 2
+            return 3
         return 4
 
     def _use_services_cache(self) -> bool:
@@ -653,23 +653,18 @@ class TuyaBLEDevice:
             await asyncio.sleep(0.01)
             if self._client and self._client.is_connected and self._is_paired:
                 return
-            attempts_count = self._connect_attempts_count()
-            while attempts_count > 0:
-                attempts_count -= 1
-                if attempts_count == 0:
-                    _LOGGER.error(
-                        "%s: Connecting, all attempts failed; RSSI: %s",
-                        self.address,
-                        self.rssi,
-                    )
-                    raise BleakNotFoundError()
+            for attempt in range(1, self._connect_attempts_count() + 1):
+                if attempt > 1:
+                    await asyncio.sleep(1)
                 try:
                     async with global_connect_lock:
                         ble_device = self._get_ble_device()
                         _LOGGER.warning(
-                            "%s: Connecting to BLE device %s; RSSI: %s",
+                            "%s: Connecting to BLE device %s; attempt %s/%s; RSSI: %s",
                             self.address,
                             ble_device,
+                            attempt,
+                            self._connect_attempts_count(),
                             self.rssi,
                         )
                         client = await establish_connection(
@@ -786,6 +781,13 @@ class TuyaBLEDevice:
                     continue
 
                 break
+            else:
+                _LOGGER.error(
+                    "%s: Connecting, all attempts failed; RSSI: %s",
+                    self.address,
+                    self.rssi,
+                )
+                raise BleakNotFoundError()
 
         if self._client:
             if self._client.is_connected:
