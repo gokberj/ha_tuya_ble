@@ -20,6 +20,7 @@ from homeassistant.components.bluetooth import (
 from homeassistant.const import (
     CONF_ADDRESS,
     CONF_COUNTRY_CODE,
+    CONF_DEVICE_ID,
     CONF_PASSWORD,
     CONF_USERNAME,
 )
@@ -34,7 +35,14 @@ from .const import (
     CONF_ACCESS_SECRET,
     CONF_AUTH_TYPE,
     CONF_APP_TYPE,
+    CONF_CATEGORY,
     CONF_ENDPOINT,
+    CONF_DEVICE_NAME,
+    CONF_LOCAL_KEY,
+    CONF_PRODUCT_ID,
+    CONF_PRODUCT_MODEL,
+    CONF_PRODUCT_NAME,
+    CONF_UUID,
     SMARTLIFE_APP,
     TUYA_SMART_APP,
     TUYA_COUNTRIES,
@@ -42,7 +50,7 @@ from .const import (
     TUYA_RESPONSE_MSG,
     TUYA_RESPONSE_SUCCESS,
 )
-from .devices import TuyaBLEData, get_device_readable_name
+from .devices import TuyaBLEData, get_device_readable_name, get_short_address
 from .cloud import HASSTuyaBLEDeviceManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -291,7 +299,7 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data[CONF_ADDRESS] = discovery_info.address
             if credentials is None:
                 self._get_device_info_error = True
-                errors["base"] = "device_not_registered"
+                return await self.async_step_manual_credentials()
             else:
                 return self.async_create_entry(
                     title=local_name,
@@ -339,6 +347,59 @@ class TuyaBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                         }
                     ),
                 },
+            ),
+            errors=errors,
+        )
+
+    async def async_step_manual_credentials(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle manual BLE credentials when Tuya cloud lookup fails."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._data.update(user_input)
+            address = self._data[CONF_ADDRESS]
+            await self.async_set_unique_id(address, raise_on_progress=False)
+            self._abort_if_unique_id_configured()
+            title = user_input.get(CONF_DEVICE_NAME) or f"Tuya BLE {get_short_address(address)}"
+            return self.async_create_entry(
+                title=title,
+                data={CONF_ADDRESS: address},
+                options=self._data,
+            )
+
+        address = self._data.get(CONF_ADDRESS, "")
+        short_address = get_short_address(address) if address else ""
+        return self.async_show_form(
+            step_id="manual_credentials",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_UUID, default=self._data.get(CONF_UUID, "")): str,
+                    vol.Required(
+                        CONF_LOCAL_KEY, default=self._data.get(CONF_LOCAL_KEY, "")
+                    ): str,
+                    vol.Required(
+                        CONF_DEVICE_ID, default=self._data.get(CONF_DEVICE_ID, "")
+                    ): str,
+                    vol.Required(CONF_CATEGORY, default=self._data.get(CONF_CATEGORY, "cl")): str,
+                    vol.Required(
+                        CONF_PRODUCT_ID,
+                        default=self._data.get(CONF_PRODUCT_ID, "manual_cl"),
+                    ): str,
+                    vol.Optional(
+                        CONF_DEVICE_NAME,
+                        default=self._data.get(CONF_DEVICE_NAME, f"Tuya BLE {short_address}"),
+                    ): str,
+                    vol.Optional(
+                        CONF_PRODUCT_MODEL,
+                        default=self._data.get(CONF_PRODUCT_MODEL, ""),
+                    ): str,
+                    vol.Optional(
+                        CONF_PRODUCT_NAME,
+                        default=self._data.get(CONF_PRODUCT_NAME, ""),
+                    ): str,
+                }
             ),
             errors=errors,
         )
