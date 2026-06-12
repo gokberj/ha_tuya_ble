@@ -695,6 +695,12 @@ class TuyaBLEDevice:
 
                 if client and client.is_connected:
                     _LOGGER.debug("%s: Connected; RSSI: %s", self.address, self.rssi)
+                    if self.category == "cl":
+                        _LOGGER.warning(
+                            "%s: Connected to BLE device; RSSI: %s",
+                            self.address,
+                            self.rssi,
+                        )
                     self._client = client
                     try:
                         if delay := self._post_connect_notify_delay():
@@ -702,6 +708,12 @@ class TuyaBLEDevice:
                         await self._client.start_notify(
                             CHARACTERISTIC_NOTIFY, self._notification_handler
                         )
+                        if self.category == "cl":
+                            _LOGGER.warning(
+                                "%s: Notifications started on %s",
+                                self.address,
+                                CHARACTERISTIC_NOTIFY,
+                            )
                     except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
                         self._client = None
                         _LOGGER.error(
@@ -1087,6 +1099,13 @@ class TuyaBLEDevice:
                         packet,
                         False,
                     )
+                    if self.category == "cl":
+                        _LOGGER.warning(
+                            "%s: Wrote BLE packet to %s (%s bytes)",
+                            self.address,
+                            CHARACTERISTIC_WRITE,
+                            len(packet),
+                        )
                 except:
                     _LOGGER.error(
                         "%s: Error during sending packet",
@@ -1457,6 +1476,12 @@ class TuyaBLEDevice:
             data,
             wait_for_response=wait_for_response,
         )
+        if self.category == "cl":
+            _LOGGER.warning(
+                "%s: Datapoint command sent (%s bytes)",
+                self.address,
+                len(data),
+            )
 
     async def _send_datapoints(self, datapoint_ids: list[int]) -> None:
         """Send new values of datapoints to the device."""
