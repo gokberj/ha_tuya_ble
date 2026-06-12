@@ -322,7 +322,7 @@ class TuyaBLEDevice:
 
     def _use_services_cache(self) -> bool:
         """Return if cached GATT services should be used."""
-        return self.category == "cl"
+        return False
 
     def _post_connect_notify_delay(self) -> float:
         """Return delay before starting notifications."""
@@ -715,6 +715,12 @@ class TuyaBLEDevice:
                                 CHARACTERISTIC_NOTIFY,
                             )
                     except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
+                        if self.category == "cl" and self._client:
+                            _LOGGER.warning(
+                                "%s: Available GATT services after notify failure: %s",
+                                self.address,
+                                list(self._client.services.characteristics.keys()),
+                            )
                         self._client = None
                         _LOGGER.error(
                             "%s: starting notifications failed",
