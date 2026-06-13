@@ -241,6 +241,7 @@ class TuyaBLEDevice:
         self._connect_lock = asyncio.Lock()
         self._client: BleakClientWithServiceCache | None = None
         self._expected_disconnect = False
+        self._idle_disconnect_task: asyncio.Task | None = None
         self._connected_callbacks: list[Callable[[], None]] = []
         self._callbacks: list[Callable[[list[TuyaBLEDataPoint]], None]] = []
         self._disconnected_callbacks: list[Callable[[], None]] = []
@@ -317,6 +318,12 @@ class TuyaBLEDevice:
     def _use_short_lived_connection(self) -> bool:
         """Use short-lived BLE command sessions for unstable cl devices."""
         return self.category == "cl"
+
+    def _idle_disconnect_delay(self) -> float:
+        """Return how long to keep a command connection open after use."""
+        if self.category == "cl":
+            return 90
+        return 0
 
     def _uses_v3_datapoints(self) -> bool:
         """Return if the device uses v3 datapoint commands."""
@@ -585,6 +592,7 @@ class TuyaBLEDevice:
     async def stop(self) -> None:
         """Stop the TuyaBLE."""
         _LOGGER.debug("%s: Stop", self.address)
+        self._cancel_idle_disconnect()
         await self._execute_disconnect()
 
     def _disconnected(self, client: BleakClientWithServiceCache) -> None:
@@ -622,7 +630,43 @@ class TuyaBLEDevice:
 
     def _disconnect(self) -> None:
         """Disconnect from device."""
+        self._cancel_idle_disconnect()
         asyncio.create_task(self._execute_timed_disconnect())
+
+    def _cancel_idle_disconnect(self) -> None:
+        """Cancel a pending idle disconnect."""
+        if self._idle_disconnect_task and not self._idle_disconnect_task.done():
+            self._idle_disconnect_task.cancel()
+        self._idle_disconnect_task = None
+
+    def _schedule_idle_disconnect(self) -> None:
+        """Schedule a delayed disconnect after command activity."""
+        delay = self._idle_disconnect_delay()
+        if delay <= 0:
+            self._disconnect()
+            return
+
+        self._cancel_idle_disconnect()
+        self._idle_disconnect_task = asyncio.create_task(
+            self._execute_idle_disconnect(delay)
+        )
+
+    async def _execute_idle_disconnect(self, delay: float) -> None:
+        """Disconnect after a period of command inactivity."""
+        try:
+            await asyncio.sleep(delay)
+            _LOGGER.debug(
+                "%s: Disconnecting after %.0fs idle command window",
+                self.address,
+                delay,
+            )
+            await self._execute_disconnect()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            current_task = asyncio.current_task()
+            if self._idle_disconnect_task is current_task:
+                self._idle_disconnect_task = None
 
     async def _execute_timed_disconnect(self) -> None:
         """Execute timed disconnection."""
@@ -650,6 +694,7 @@ class TuyaBLEDevice:
     async def _ensure_connected(self) -> None:
         """Ensure connection to device is established."""
         global global_connect_lock
+        self._cancel_idle_disconnect()
         if self._expected_disconnect:
             _LOGGER.debug(
                 "%s: Expected disconnect in progress,"
@@ -1562,4 +1607,4 @@ class TuyaBLEDevice:
             await self._send_datapoints_v3(datapoint_ids)
         finally:
             if self._use_short_lived_connection():
-                self._disconnect()
+                self._schedule_idle_disconnect()
