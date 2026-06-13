@@ -216,7 +216,7 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
 
     async def _update_cover_state(self, state: TuyaCoverState) -> None:
         if self._mapping.cover_state_dp_id != 0:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "%s: Sending cover command %s via datapoint %s",
                 self._device.address,
                 state.name,
@@ -307,7 +307,7 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                 position,
             )
             if datapoint:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "%s: Sending cover position %s via datapoint %s",
                     self._device.address,
                     kwargs[ATTR_POSITION],

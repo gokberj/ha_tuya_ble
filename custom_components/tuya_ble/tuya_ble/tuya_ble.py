@@ -346,7 +346,7 @@ class TuyaBLEDevice:
 
     def _wait_for_datapoint_response(self) -> bool:
         """Return if datapoint writes should wait for a command response."""
-        return True
+        return self.category != "cl"
 
     def _datapoint_response_timeout(self) -> float:
         """Return timeout for datapoint command responses."""
@@ -679,7 +679,7 @@ class TuyaBLEDevice:
                 try:
                     async with global_connect_lock:
                         ble_device = self._get_ble_device()
-                        _LOGGER.warning(
+                        _LOGGER.debug(
                             "%s: Connecting to BLE device %s; attempt %s/%s; RSSI: %s",
                             self.address,
                             ble_device,
@@ -716,7 +716,7 @@ class TuyaBLEDevice:
                 if client and client.is_connected:
                     _LOGGER.debug("%s: Connected; RSSI: %s", self.address, self.rssi)
                     if self.category == "cl":
-                        _LOGGER.warning(
+                        _LOGGER.debug(
                             "%s: Connected to BLE device; RSSI: %s",
                             self.address,
                             self.rssi,
@@ -729,7 +729,7 @@ class TuyaBLEDevice:
                             CHARACTERISTIC_NOTIFY, self._notification_handler
                         )
                         if self.category == "cl":
-                            _LOGGER.warning(
+                            _LOGGER.debug(
                                 "%s: Notifications started on %s",
                                 self.address,
                                 CHARACTERISTIC_NOTIFY,
@@ -753,7 +753,7 @@ class TuyaBLEDevice:
 
                 if self._client and self._client.is_connected:
                     if self._supports_device_info_request():
-                        _LOGGER.warning("%s: Sending device info request", self.address)
+                        _LOGGER.debug("%s: Sending device info request", self.address)
                         try:
                             if not await self._send_packet_while_connected(
                                 TuyaBLECode.FUN_SENDER_DEVICE_INFO,
@@ -798,7 +798,7 @@ class TuyaBLEDevice:
 
                 if self._client and self._client.is_connected:
                     if self._attempts_pairing_request():
-                        _LOGGER.warning("%s: Sending pairing request", self.address)
+                        _LOGGER.debug("%s: Sending pairing request", self.address)
                         try:
                             if not await self._send_packet_while_connected(
                                 TuyaBLECode.FUN_SENDER_PAIR,
@@ -1156,7 +1156,7 @@ class TuyaBLEDevice:
                         False,
                     )
                     if self.category == "cl":
-                        _LOGGER.warning(
+                        _LOGGER.debug(
                             "%s: Wrote BLE packet to %s (%s bytes)",
                             self.address,
                             CHARACTERISTIC_WRITE,
@@ -1367,7 +1367,7 @@ class TuyaBLEDevice:
                     response_to,
                     result,
                 )
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "%s: Received response to %s packet #%s, result: %s",
                     self.address,
                     code.name,
@@ -1511,7 +1511,7 @@ class TuyaBLEDevice:
         for dp_id in datapoint_ids:
             dp = self._datapoints[dp_id]
             value = dp._get_value()
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "%s: Sending datapoint update, id: %s, type: %s: value: %s",
                 self.address,
                 dp.id,
@@ -1523,12 +1523,12 @@ class TuyaBLEDevice:
 
         wait_for_response = self._wait_for_datapoint_response()
         if not wait_for_response:
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "%s: Sending datapoint command without waiting for response",
                 self.address,
             )
         elif self.category == "cl":
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "%s: Sending datapoint command and waiting for response",
                 self.address,
             )
@@ -1539,7 +1539,7 @@ class TuyaBLEDevice:
             response_timeout=self._datapoint_response_timeout(),
         )
         if self.category == "cl":
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "%s: Datapoint command sent (%s bytes)",
                 self.address,
                 len(data),
@@ -1551,7 +1551,7 @@ class TuyaBLEDevice:
             if not self._uses_v3_datapoints():
                 raise TuyaBLEDeviceError(0)
             if self._protocol_version != 3:
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "%s: Forcing v3 datapoint command for %s category"
                     " despite advertised protocol %s",
                     self.address,
