@@ -47,6 +47,9 @@ class TuyaBLECoverMapping:
     cover_set_upper_limit_dp_id: int = 0
     cover_factory_reset_dp_id: int = 0
     cover_position_set_dp: int = 0
+    open_value: int = TuyaCoverState.OPEN
+    stop_value: int = TuyaCoverState.STOP
+    close_value: int = TuyaCoverState.CLOSE
 
 
 @dataclass
@@ -109,11 +112,23 @@ mapping: dict[str, TuyaBLECategoryCoverMapping] = {
                 ],
             ),
             **dict.fromkeys(
-                ["9ayszy9m", "kcy0x4pi"],
+                ["kcy0x4pi"],
                 [
                     DEFAULT_CL_COVER_MAPPING
                 ],
             ),
+            "9ayszy9m": [
+                TuyaBLECoverMapping(
+                    description=CoverEntityDescription(key="ble_curtain_controller"),
+                    cover_state_dp_id=1,
+                    cover_position_set_dp=2,
+                    cover_position_dp_id=3,
+                    cover_battery_dp_id=13,
+                    open_value=TuyaCoverState.CLOSE,
+                    stop_value=TuyaCoverState.STOP,
+                    close_value=TuyaCoverState.OPEN,
+                )
+            ],
         },
     ),
 }
@@ -177,12 +192,12 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                 self._attr_is_opening = False
                 self._attr_is_closing = False
                 match datapoint.value:
-                    case 0:
+                    case self._mapping.open_value:
                         self._attr_is_opening = True
-                    case 1:
+                    case self._mapping.stop_value:
                         # Do nothing as it stopped
                         pass
-                    case 2:
+                    case self._mapping.close_value:
                         self._attr_is_closing = True
 
         if self._mapping.cover_position_dp_id != 0:
@@ -245,13 +260,23 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
 
     async def _update_cover_state_without_validation(self, state: TuyaCoverState) -> None:
         if self._mapping.cover_state_dp_id != 0:
+            value = self._cover_state_to_datapoint_value(state)
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.cover_state_dp_id,
                 TuyaBLEDataPointType.DT_ENUM,
-                state.value,
+                value,
             )
             if datapoint:
-                await datapoint.set_value(state.value)
+                await datapoint.set_value(value)
+
+    def _cover_state_to_datapoint_value(self, state: TuyaCoverState) -> int:
+        match state:
+            case TuyaCoverState.OPEN:
+                return int(self._mapping.open_value)
+            case TuyaCoverState.STOP:
+                return int(self._mapping.stop_value)
+            case TuyaCoverState.CLOSE:
+                return int(self._mapping.close_value)
 
     async def _validate_data_update_from_device_and_reconnect_if_needed(
         self,
