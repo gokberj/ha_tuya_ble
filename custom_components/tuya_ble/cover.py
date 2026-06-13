@@ -50,6 +50,7 @@ class TuyaBLECoverMapping:
     open_value: int = TuyaCoverState.OPEN
     stop_value: int = TuyaCoverState.STOP
     close_value: int = TuyaCoverState.CLOSE
+    invert_position: bool = True
 
 
 @dataclass
@@ -124,9 +125,7 @@ mapping: dict[str, TuyaBLECategoryCoverMapping] = {
                     cover_position_set_dp=2,
                     cover_position_dp_id=3,
                     cover_battery_dp_id=13,
-                    open_value=TuyaCoverState.CLOSE,
-                    stop_value=TuyaCoverState.STOP,
-                    close_value=TuyaCoverState.OPEN,
+                    invert_position=False,
                 )
             ],
         },
@@ -203,9 +202,9 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
         if self._mapping.cover_position_dp_id != 0:
             datapoint = self._device.datapoints[self._mapping.cover_position_dp_id]
             if datapoint:
-                self._attr_current_cover_position = 100 - int(
-                    datapoint.value
-                )  # reverse position
+                self._attr_current_cover_position = (
+                    self._device_position_to_ha_position(int(datapoint.value))
+                )
                 if self._attr_current_cover_position == 0:
                     self._attr_is_closed = True
                     self._attr_is_closing = False
@@ -324,7 +323,7 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
 
     async def async_set_cover_position(self, **kwargs: logging.Any) -> None:
         """Set cover position"""
-        position = 100 - kwargs[ATTR_POSITION]
+        position = self._ha_position_to_device_position(kwargs[ATTR_POSITION])
         if self._mapping.cover_position_set_dp != 0:
             datapoint = self._device.datapoints.get_or_create(
                 self._mapping.cover_position_set_dp,
@@ -339,6 +338,16 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                     self._mapping.cover_position_set_dp,
                 )
                 await datapoint.set_value(position)
+
+    def _device_position_to_ha_position(self, position: int) -> int:
+        if self._mapping.invert_position:
+            return 100 - position
+        return position
+
+    def _ha_position_to_device_position(self, position: int) -> int:
+        if self._mapping.invert_position:
+            return 100 - position
+        return position
 
 
 async def async_setup_entry(
