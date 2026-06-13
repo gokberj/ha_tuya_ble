@@ -149,6 +149,9 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        if self._device.category == "cl":
+            self._attr_is_closed = None
+            self._attr_current_cover_position = None
 
     @property
     def supported_features(self) -> CoverEntityFeature:
@@ -269,6 +272,17 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
             await self._device.update()
 
     def _update_ha_state_for_cover_state(self, state: TuyaCoverState) -> None:
+        if self._device.category == "cl":
+            self._attr_is_opening = False
+            self._attr_is_closing = False
+            if self._mapping.cover_position_dp_id != 0:
+                datapoint = self._device.datapoints[self._mapping.cover_position_dp_id]
+                if datapoint is None:
+                    self._attr_is_closed = None
+                    self._attr_current_cover_position = None
+            self.async_write_ha_state()
+            return
+
         # sometimes the device does not update DP 1 so force the current state
         self._attr_is_closed = False
         self._attr_is_closing = False
