@@ -34,17 +34,19 @@ PLATFORMS: list[Platform] = [
 _LOGGER = logging.getLogger(__name__)
 
 INITIAL_UPDATE_TIMEOUT = 20
+CL_INITIAL_UPDATE_TIMEOUT = 90
 
 
 async def _async_initial_update(device: TuyaBLEDevice) -> None:
     """Fetch initial device state without blocking Home Assistant startup."""
+    timeout = CL_INITIAL_UPDATE_TIMEOUT if device.category == "cl" else INITIAL_UPDATE_TIMEOUT
     try:
-        await asyncio.wait_for(device.update(), timeout=INITIAL_UPDATE_TIMEOUT)
+        await asyncio.wait_for(device.update(), timeout=timeout)
     except TimeoutError:
         _LOGGER.warning(
             "%s: Initial update timed out after %s seconds",
             device.address,
-            INITIAL_UPDATE_TIMEOUT,
+            timeout,
         )
     except BLEAK_EXCEPTIONS:
         _LOGGER.debug("%s: Initial update failed", device.address, exc_info=True)
@@ -81,8 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"Could not communicate with Tuya BLE device with address {address}"
         ) from ex
     '''
-    if device.category != "cl":
-        hass.async_create_task(_async_initial_update(device))
+    hass.async_create_task(_async_initial_update(device))
 
     @callback
     def _async_update_ble(

@@ -384,7 +384,11 @@ class TuyaBLEDevice:
 
     async def update(self) -> None:
         _LOGGER.debug("%s: Updating", self.address)
-        await self._send_packet(TuyaBLECode.FUN_SENDER_DEVICE_STATUS, bytes())
+        try:
+            await self._send_packet(TuyaBLECode.FUN_SENDER_DEVICE_STATUS, bytes())
+        finally:
+            if self._use_short_lived_connection():
+                self._schedule_idle_disconnect()
 
     async def _update_device_info(self) -> bool:
         if self._device_info is None:

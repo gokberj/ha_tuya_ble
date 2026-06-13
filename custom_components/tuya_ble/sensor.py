@@ -48,6 +48,28 @@ class TuyaBLESensorMapping:
     coefficient: float = 1.0
     icons: list[str] | None = None
     is_available: TuyaBLESensorIsAvailable = None
+
+def battery_percentage_getter(sensor: "TuyaBLESensor") -> None:
+    datapoint = sensor._device.datapoints[sensor._mapping.dp_id]
+    if not datapoint:
+        return
+
+    value = datapoint.value
+    if isinstance(value, bytes):
+        if len(value) == 0:
+            return
+        value = int.from_bytes(value, "big", signed=False)
+
+    try:
+        percentage = float(value) / sensor._mapping.coefficient
+    except (TypeError, ValueError):
+        return
+
+    percentage = max(0.0, min(100.0, percentage))
+    sensor._attr_native_value = (
+        int(percentage) if percentage.is_integer() else percentage
+    )
+
 @dataclass
 class TuyaBLEBatteryMapping(TuyaBLESensorMapping):
     description: SensorEntityDescription = field(
@@ -59,6 +81,8 @@ class TuyaBLEBatteryMapping(TuyaBLESensorMapping):
             state_class=SensorStateClass.MEASUREMENT,
         )
     )
+    getter: Callable[[TuyaBLESensor], None] | None = battery_percentage_getter
+
 @dataclass
 class TuyaBLETemperatureMapping(TuyaBLESensorMapping):
     description: SensorEntityDescription = field(
@@ -369,9 +393,12 @@ mapping: dict[str, TuyaBLECategorySensorMapping] = {
         },
     ),
     "cl": TuyaBLECategorySensorMapping(
+        mapping=[
+            TuyaBLEBatteryMapping(dp_id=13),
+        ],
         products={
             **dict.fromkeys(
-                ["4pbr8eig", "qqdxfdht", "kcy0x4pi"], # Blind Controller
+                ["4pbr8eig", "qqdxfdht", "kcy0x4pi", "9ayszy9m"], # Blind Controller
                 [
                     TuyaBLEBatteryMapping(dp_id=13),
                     TuyaBLESensorMapping(
