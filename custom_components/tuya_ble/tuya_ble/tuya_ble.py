@@ -346,7 +346,13 @@ class TuyaBLEDevice:
 
     def _wait_for_datapoint_response(self) -> bool:
         """Return if datapoint writes should wait for a command response."""
-        return self.category != "cl"
+        return True
+
+    def _datapoint_response_timeout(self) -> float:
+        """Return timeout for datapoint command responses."""
+        if self.category == "cl":
+            return 8
+        return RESPONSE_WAIT_TIMEOUT
 
     def _build_pairing_request(self) -> bytes:
         result = bytearray()
@@ -991,6 +997,7 @@ class TuyaBLEDevice:
         code: TuyaBLECode,
         data: bytes,
         wait_for_response: bool = True,
+        response_timeout: float = RESPONSE_WAIT_TIMEOUT,
         # retry: int | None = None,
     ) -> None:
         """Send packet to device and optional read response."""
@@ -1005,7 +1012,9 @@ class TuyaBLEDevice:
             async with self._connect_lock:
                 pass
         await self._ensure_connected()
-        await self._send_packet_while_connected(code, data, 0, wait_for_response)
+        await self._send_packet_while_connected(
+            code, data, 0, wait_for_response, response_timeout
+        )
 
     async def _send_response(
         self,
@@ -1518,10 +1527,16 @@ class TuyaBLEDevice:
                 "%s: Sending datapoint command without waiting for response",
                 self.address,
             )
+        elif self.category == "cl":
+            _LOGGER.warning(
+                "%s: Sending datapoint command and waiting for response",
+                self.address,
+            )
         await self._send_packet(
             TuyaBLECode.FUN_SENDER_DPS,
             data,
             wait_for_response=wait_for_response,
+            response_timeout=self._datapoint_response_timeout(),
         )
         if self.category == "cl":
             _LOGGER.warning(
