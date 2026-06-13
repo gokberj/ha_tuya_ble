@@ -125,7 +125,6 @@ mapping: dict[str, TuyaBLECategoryCoverMapping] = {
                     cover_position_set_dp=2,
                     cover_position_dp_id=3,
                     cover_battery_dp_id=13,
-                    invert_position=False,
                 )
             ],
         },
