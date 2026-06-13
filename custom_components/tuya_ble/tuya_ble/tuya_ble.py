@@ -293,12 +293,26 @@ class TuyaBLEDevice:
             self._decode_advertisement_data()
 
     def _supports_device_info_request(self) -> bool:
-        """Some cl curtain devices disconnect on device info request."""
+        """Return if device-info should be attempted."""
+        return True
+
+    def _requires_device_info_request(self) -> bool:
+        """Return if device-info failure should abort connection."""
         return self.category != "cl"
 
     def _requires_pairing_request(self) -> bool:
         """Some cl curtain devices fail active pairing over BLE proxy."""
         return self.category != "cl"
+
+    def _attempts_pairing_request(self) -> bool:
+        """Return if active pairing should be attempted."""
+        return True
+
+    def _handshake_response_timeout(self) -> float:
+        """Return timeout for optional handshake responses."""
+        if self.category == "cl":
+            return 8
+        return RESPONSE_WAIT_TIMEOUT
 
     def _use_short_lived_connection(self) -> bool:
         """Use short-lived BLE command sessions for unstable cl devices."""
@@ -733,28 +747,40 @@ class TuyaBLEDevice:
 
                 if self._client and self._client.is_connected:
                     if self._supports_device_info_request():
-                        _LOGGER.debug("%s: Sending device info request", self.address)
+                        _LOGGER.warning("%s: Sending device info request", self.address)
                         try:
                             if not await self._send_packet_while_connected(
                                 TuyaBLECode.FUN_SENDER_DEVICE_INFO,
                                 bytes(0),
                                 0,
                                 True,
+                                self._handshake_response_timeout(),
                             ):
+                                if self._requires_device_info_request():
+                                    self._client = None
+                                    _LOGGER.error(
+                                        "%s: Sending device info request failed",
+                                        self.address,
+                                    )
+                                    continue
+                                _LOGGER.warning(
+                                    "%s: Device info request failed; continuing with fallback key",
+                                    self.address,
+                                )
+                        except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
+                            if self._requires_device_info_request():
                                 self._client = None
                                 _LOGGER.error(
                                     "%s: Sending device info request failed",
                                     self.address,
+                                    exc_info=True,
                                 )
                                 continue
-                        except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                            self._client = None
-                            _LOGGER.error(
-                                "%s: Sending device info request failed",
+                            _LOGGER.warning(
+                                "%s: Device info request failed; continuing with fallback key",
                                 self.address,
                                 exc_info=True,
                             )
-                            continue
                     else:
                         _LOGGER.debug(
                             "%s: Skipping device info request for %s category",
@@ -765,29 +791,43 @@ class TuyaBLEDevice:
                     continue
 
                 if self._client and self._client.is_connected:
-                    if self._requires_pairing_request():
-                        _LOGGER.debug("%s: Sending pairing request", self.address)
+                    if self._attempts_pairing_request():
+                        _LOGGER.warning("%s: Sending pairing request", self.address)
                         try:
                             if not await self._send_packet_while_connected(
                                 TuyaBLECode.FUN_SENDER_PAIR,
                                 self._build_pairing_request(),
                                 0,
                                 True,
+                                self._handshake_response_timeout(),
                             ):
+                                if self._requires_pairing_request():
+                                    self._client = None
+                                    _LOGGER.error(
+                                        "%s: Sending pairing request failed",
+                                        self.address,
+                                    )
+                                    continue
+                                self._is_paired = True
+                                _LOGGER.warning(
+                                    "%s: Pairing request failed; continuing with fallback session",
+                                    self.address,
+                                )
+                        except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
+                            if self._requires_pairing_request():
                                 self._client = None
                                 _LOGGER.error(
                                     "%s: Sending pairing request failed",
                                     self.address,
+                                    exc_info=True,
                                 )
                                 continue
-                        except:  # [BLEAK_EXCEPTIONS, BleakNotFoundError]:
-                            self._client = None
-                            _LOGGER.error(
-                                "%s: Sending pairing request failed",
+                            self._is_paired = True
+                            _LOGGER.warning(
+                                "%s: Pairing request failed; continuing with fallback session",
                                 self.address,
                                 exc_info=True,
                             )
-                            continue
                     else:
                         self._is_paired = True
                         _LOGGER.debug(
@@ -983,6 +1023,7 @@ class TuyaBLEDevice:
         data: bytes,
         response_to: int,
         wait_for_response: bool,
+        response_timeout: float = RESPONSE_WAIT_TIMEOUT,
         # retry: int | None = None
     ) -> bool:
         """Send packet to device and optional read response."""
@@ -1012,7 +1053,7 @@ class TuyaBLEDevice:
         await self._int_send_packet_while_connected(packets)
         if future:
             try:
-                await asyncio.wait_for(future, RESPONSE_WAIT_TIMEOUT)
+                await asyncio.wait_for(future, response_timeout)
             except asyncio.TimeoutError:
                 _LOGGER.error(
                     "%s: timeout receiving response, RSSI: %s",
