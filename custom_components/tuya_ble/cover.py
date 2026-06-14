@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import IntEnum
 import logging
+import time
 
 from bleak_retry_connector import BleakNotFoundError
 from homeassistant.components.cover import (
@@ -162,6 +163,8 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
     ) -> None:
         super().__init__(hass, coordinator, device, product, mapping.description)
         self._mapping = mapping
+        self._last_cl_position_override: float | None = None
+        self._last_cl_state_update: float | None = None
         if self._device.category == "cl":
             self._attr_is_closed = None
             self._attr_current_cover_position = None
@@ -189,18 +192,31 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
             if datapoint:
                 self._attr_is_opening = False
                 self._attr_is_closing = False
-                match datapoint.value:
-                    case self._mapping.open_value:
-                        self._attr_is_opening = True
-                    case self._mapping.stop_value:
-                        # Do nothing as it stopped
-                        pass
-                    case self._mapping.close_value:
-                        self._attr_is_closing = True
+                if self._device.category == "cl":
+                    self._last_cl_state_update = datapoint.timestamp
+                    match datapoint.value:
+                        case self._mapping.open_value:
+                            self._set_cl_cover_position(100, mark_override=False)
+                        case self._mapping.stop_value:
+                            # Do nothing as it stopped
+                            pass
+                        case self._mapping.close_value:
+                            self._set_cl_cover_position(0, mark_override=False)
+                else:
+                    match datapoint.value:
+                        case self._mapping.open_value:
+                            self._attr_is_opening = True
+                        case self._mapping.stop_value:
+                            # Do nothing as it stopped
+                            pass
+                        case self._mapping.close_value:
+                            self._attr_is_closing = True
 
         if self._mapping.cover_position_dp_id != 0:
             datapoint = self._device.datapoints[self._mapping.cover_position_dp_id]
-            if datapoint:
+            if datapoint and not self._is_stale_cl_position_datapoint(
+                datapoint.timestamp
+            ):
                 self._attr_current_cover_position = (
                     self._device_position_to_ha_position(int(datapoint.value))
                 )
@@ -298,11 +314,10 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
         if self._device.category == "cl":
             self._attr_is_opening = False
             self._attr_is_closing = False
-            if self._mapping.cover_position_dp_id != 0:
-                datapoint = self._device.datapoints[self._mapping.cover_position_dp_id]
-                if datapoint is None:
-                    self._attr_is_closed = None
-                    self._attr_current_cover_position = None
+            if state == TuyaCoverState.OPEN:
+                self._set_cl_cover_position(100)
+            elif state == TuyaCoverState.CLOSE:
+                self._set_cl_cover_position(0)
             self.async_write_ha_state()
             return
 
@@ -337,6 +352,38 @@ class TuyaBLECover(TuyaBLEEntity, CoverEntity):
                     self._mapping.cover_position_set_dp,
                 )
                 await datapoint.set_value(position)
+                if self._device.category == "cl":
+                    self._set_cl_cover_position(kwargs[ATTR_POSITION])
+                    self.async_write_ha_state()
+
+    def _set_cl_cover_position(
+        self,
+        ha_position: int,
+        mark_override: bool = True,
+    ) -> None:
+        """Set the local HA state for cl devices."""
+        position = max(0, min(100, int(ha_position)))
+        self._attr_current_cover_position = position
+        self._attr_is_closed = position == 0
+        self._attr_is_opening = False
+        self._attr_is_closing = False
+        if mark_override:
+            self._last_cl_position_override = time.time()
+
+    def _is_stale_cl_position_datapoint(self, timestamp: float) -> bool:
+        """Return if a cl position datapoint is older than a known command/state."""
+        if self._device.category != "cl":
+            return False
+
+        freshness_markers = [
+            marker
+            for marker in (
+                self._last_cl_position_override,
+                self._last_cl_state_update,
+            )
+            if marker is not None
+        ]
+        return bool(freshness_markers) and timestamp < max(freshness_markers)
 
     def _device_position_to_ha_position(self, position: int) -> int:
         if self._mapping.invert_position:
